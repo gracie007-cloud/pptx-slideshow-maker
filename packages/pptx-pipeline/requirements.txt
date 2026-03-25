@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-pptx==1.0.2
+markitdown[pptx]==0.1.1
+Pillow==11.1.0
+defusedxml==0.7.1
+python-multipart==0.0.17
+pydantic==2.10.0

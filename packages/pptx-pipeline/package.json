@@ -1,0 +1,10 @@
+{
+  "name": "@slideshow/pptx-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"[pptx-pipeline] Runs via Docker: docker compose up pptx-pipeline\"",
+    "docker:build": "docker build -t slideshow-pptx-pipeline .",
+    "docker:run": "docker run -p 8100:8100 slideshow-pptx-pipeline"
+  }
+}

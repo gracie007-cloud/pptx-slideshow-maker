@@ -1,0 +1,23 @@
+{
+  "name": "@slideshow/realtime",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.0",
+    "ioredis": "^5.4.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@slideshow/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

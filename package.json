@@ -1,0 +1,21 @@
+{
+  "name": "pptx-slideshow-maker",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm exec turbo dev",
+    "build": "pnpm exec turbo build",
+    "lint": "pnpm exec turbo lint",
+    "type-check": "pnpm exec turbo type-check",
+    "db:generate": "pnpm --filter @slideshow/web db:generate",
+    "db:push": "pnpm --filter @slideshow/web db:push",
+    "db:migrate": "pnpm --filter @slideshow/web db:migrate",
+    "db:studio": "pnpm --filter @slideshow/web db:studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
