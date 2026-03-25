@@ -76,7 +76,7 @@ export function useSocket(sessionId?: string): UseSocketReturn {
       handler: ServerToClientEvents[E]
     ) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      socketRef.current?.on(event as string, handler as any);
+      socketRef.current?.on(event as any, handler as any);
     },
     []
   );

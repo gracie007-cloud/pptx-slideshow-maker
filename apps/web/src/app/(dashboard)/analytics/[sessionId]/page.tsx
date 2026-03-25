@@ -288,8 +288,8 @@ export default function SessionAnalyticsPage() {
                     stroke="#9ca3af"
                   />
                   <Tooltip
-                    formatter={(value: number, _name: string, props: { payload: { pct: number } }) => [
-                      `${value} (${props.payload.pct}%)`,
+                    formatter={(value: number, _name: string, props: any) => [
+                      `${value} (${props?.payload?.pct ?? 0}%)`,
                       "Responses",
                     ]}
                     contentStyle={{

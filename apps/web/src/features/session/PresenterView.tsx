@@ -170,7 +170,7 @@ export default function PresenterView({
             {showAnnotations && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
                 <AnnotationToolbar
-                  onDraw={drawAnnotation}
+                  onDraw={(data) => drawAnnotation(JSON.stringify(data))}
                   onClear={clearAnnotations}
                   active={showAnnotations}
                 />
@@ -178,7 +178,7 @@ export default function PresenterView({
             )}
 
             {showSpotlight && (
-              <Spotlight active={showSpotlight} onMove={moveSpotlight} />
+              <Spotlight active={showSpotlight} onMove={(data) => moveSpotlight(data.x, data.y, data.radius, true)} />
             )}
 
             {showTimer && timerRemaining !== null && (
@@ -186,7 +186,7 @@ export default function PresenterView({
                 <TimerComponent
                   duration={timerRemaining}
                   onComplete={() => setShowTimer(false)}
-                  onStart={startTimer}
+                  onStart={() => startTimer(timerRemaining ?? 60)}
                   onStop={() => { stopTimer(); setShowTimer(false); }}
                 />
               </div>
@@ -202,7 +202,7 @@ export default function PresenterView({
                     <X className="h-4 w-4" />
                   </button>
                   <NamePicker
-                    participants={participants.map((p) => ({ id: p.id, name: p.name }))}
+                    participants={participants.map((p) => p.name)}
                     onSpin={spinNamePicker}
                     selectedName={null}
                   />

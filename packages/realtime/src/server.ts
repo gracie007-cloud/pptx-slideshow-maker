@@ -86,8 +86,16 @@ async function main() {
     });
   });
 
-  io.listen(SOCKET_PORT);
+  const httpServer = io.listen(SOCKET_PORT);
   console.log(`[realtime] Socket.io server running on port ${SOCKET_PORT}`);
+
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.warn(`[realtime] Port ${SOCKET_PORT} is already in use — skipping`);
+    } else {
+      console.error("[realtime] Server error:", err);
+    }
+  });
 }
 
 main().catch(console.error);

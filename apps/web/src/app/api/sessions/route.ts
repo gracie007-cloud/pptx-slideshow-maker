@@ -134,18 +134,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Initialize session state in Redis for real-time features
-    const redisKey = `session:${liveSession.id}`;
-    await redis.hmset(redisKey, {
-      status: "WAITING",
-      currentSlide: "0",
-      presentationId: parsed.data.presentationId,
-      presenterId: session.user.id,
-      joinCode,
-      participantCount: "0",
-    });
-    // Auto-expire Redis session state after 24 hours
-    await redis.expire(redisKey, 86400);
+    // Initialize session state in Redis for real-time features (optional)
+    try {
+      const redisKey = `session:${liveSession.id}`;
+      await redis.hmset(redisKey, {
+        status: "WAITING",
+        currentSlide: "0",
+        presentationId: parsed.data.presentationId,
+        presenterId: session.user.id,
+        joinCode,
+        participantCount: "0",
+      });
+      await redis.expire(redisKey, 86400);
+    } catch {
+      // Redis unavailable — session still works via DB + Socket.io in-memory
+      console.warn("Redis unavailable, session created without Redis state");
+    }
 
     return NextResponse.json({ session: liveSession }, { status: 201 });
   } catch (error) {

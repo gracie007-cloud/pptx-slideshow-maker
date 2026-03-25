@@ -8,20 +8,23 @@ function createRedisClient(): Redis {
   const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
     maxRetriesPerRequest: 3,
     retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
+      if (times > 3) return null; // stop retrying after 3 attempts
+      return Math.min(times * 200, 1000);
     },
-    // TODO: Add TLS configuration for production
+    lazyConnect: true,
   });
 
   redis.on("error", (err) => {
-    console.error("Redis connection error:", err);
+    if (process.env.NODE_ENV === "development") {
+      // Suppress noisy Redis errors in dev when Redis isn't running
+      if (!redis.status || redis.status === "connecting") return;
+    }
+    console.error("Redis connection error:", err.message);
   });
 
-  redis.on("connect", () => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("Redis connected");
-    }
+  // Attempt to connect but don't crash if it fails
+  redis.connect().catch(() => {
+    console.warn("[redis] Redis unavailable — features requiring Redis will be skipped");
   });
 
   return redis;

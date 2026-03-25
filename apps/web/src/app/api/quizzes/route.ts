@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
         slideId: parsed.data.slideId ?? null,
         type: parsed.data.type,
         question: parsed.data.question,
-        options: parsed.data.options ?? null,
+        options: parsed.data.options ?? undefined,
         correctAnswer: parsed.data.correctAnswer ?? null,
         timeLimit: parsed.data.timeLimit,
         points: parsed.data.points,
