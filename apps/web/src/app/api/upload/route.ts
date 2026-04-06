@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
           imagePath: slide.imagePath,
           textContent: slide.textContent ?? null,
           speakerNotes: slide.speakerNotes ?? null,
-          shapes: slide.shapes ? (slide.shapes as Prisma.InputJsonValue) : Prisma.DbNull,
+          shapes: slide.shapes ? (slide.shapes as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         }));
         await tx.slide.createMany({ data: slideData });
       }

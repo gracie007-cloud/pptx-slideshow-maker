@@ -25,7 +25,10 @@ export interface StorageFile {
 let _bucket: any = null;
 async function getGCSBucket() {
   if (_bucket) return _bucket;
-  const { Storage } = await import("@google-cloud/storage");
+  // Dynamic import to avoid build-time module resolution issues
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gcsModule = await (Function('return import("@google-cloud/storage")')() as Promise<any>);
+  const Storage = gcsModule.Storage;
   const storage = new Storage({ projectId: process.env.GCP_PROJECT });
   _bucket = storage.bucket(BUCKET);
   return _bucket;
