@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { uploadFile } from "@/lib/storage";
 import {
   MAX_PPTX_SIZE,
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
             imagePath: slide.imagePath,
             textContent: slide.textContent ?? null,
             speakerNotes: slide.speakerNotes ?? null,
-            shapes: slide.shapes ? (slide.shapes as object) : null,
+            shapes: slide.shapes ? (slide.shapes as Prisma.InputJsonValue) : null,
           })),
         });
       }
