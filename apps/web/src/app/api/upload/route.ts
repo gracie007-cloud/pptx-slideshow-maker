@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { uploadFile } from "@/lib/storage";
 import {
   MAX_PPTX_SIZE,
   ALLOWED_PPTX_TYPES,
@@ -8,11 +9,12 @@ import {
 } from "@slideshow/shared";
 import type { PptxProcessResult } from "@slideshow/shared";
 
-const PIPELINE_URL = process.env.PPTX_PIPELINE_URL ?? "http://localhost:8000";
+const PIPELINE_URL =
+  process.env.PIPELINE_URL ?? process.env.PPTX_PIPELINE_URL ?? "http://localhost:8100";
 
 /**
  * POST /api/upload
- * Handle PPTX file upload, forward to Python pipeline, and create DB records.
+ * Handle PPTX file upload, store in GCS/local, forward to pipeline, create DB records.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +22,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const userId = session.user.id;
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -31,79 +34,104 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
     if (
       !ALLOWED_PPTX_TYPES.includes(file.type) &&
       !file.name.endsWith(".pptx") &&
       !file.name.endsWith(".ppt")
     ) {
       return NextResponse.json(
-        {
-          error: "Invalid file type. Only .pptx and .ppt files are accepted.",
-          received: file.type,
-        },
+        { error: "Invalid file type. Only .pptx and .ppt files are accepted." },
         { status: 400 }
       );
     }
 
-    // Validate file size
     if (file.size > MAX_PPTX_SIZE) {
       return NextResponse.json(
-        {
-          error: `File too large. Maximum size is ${MAX_PPTX_SIZE / (1024 * 1024)}MB.`,
-          size: file.size,
-        },
+        { error: `File too large. Maximum ${MAX_PPTX_SIZE / 1024 / 1024}MB.` },
         { status: 413 }
       );
     }
 
-    // Forward to Python pipeline service
-    const pipelineFormData = new FormData();
-    pipelineFormData.append("file", file);
+    const title =
+      formData.get("title")?.toString() ||
+      file.name.replace(/\.(pptx?|ppt)$/i, "");
 
-    const title = formData.get("title")?.toString() || file.name.replace(/\.(pptx?|ppt)$/i, "");
-    pipelineFormData.append("title", title);
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const presentationId = crypto.randomUUID();
 
-    const pipelineResponse = await fetch(
-      `${PIPELINE_URL}${PPTX_PIPELINE_ENDPOINTS.process}`,
-      {
-        method: "POST",
-        body: pipelineFormData,
-      }
+    // Store source PPTX in GCS / local
+    const storedFile = await uploadFile(
+      fileBuffer,
+      `pptx/${userId}/${presentationId}/${file.name}`,
+      file.type || "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     );
 
-    if (!pipelineResponse.ok) {
-      const errorText = await pipelineResponse.text();
-      console.error("Pipeline processing failed:", errorText);
-      return NextResponse.json(
-        { error: "Failed to process presentation file" },
-        { status: 502 }
+    // Attempt to call the Python pipeline
+    let result: PptxProcessResult | null = null;
+
+    try {
+      const pipelineForm = new FormData();
+      pipelineForm.append("file", new Blob([fileBuffer], { type: file.type }), file.name);
+      pipelineForm.append("presentation_id", presentationId);
+
+      // Pass GCS bucket info so pipeline can upload slide images directly
+      if (process.env.GCS_BUCKET) {
+        pipelineForm.append("gcs_bucket", process.env.GCS_BUCKET);
+        pipelineForm.append("gcs_prefix", `slides/${presentationId}`);
+      }
+
+      // Get auth token for Cloud Run service-to-service calls
+      const headers: Record<string, string> = {};
+      if (process.env.NODE_ENV === "production") {
+        const tokenUrl = `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token`;
+        const tokenRes = await fetch(tokenUrl, {
+          headers: { "Metadata-Flavor": "Google" },
+        }).catch(() => null);
+        if (tokenRes?.ok) {
+          const { access_token } = await tokenRes.json();
+          headers["Authorization"] = `Bearer ${access_token}`;
+        }
+      }
+
+      const pipelineResponse = await fetch(
+        `${PIPELINE_URL}${PPTX_PIPELINE_ENDPOINTS.process}`,
+        { method: "POST", body: pipelineForm, headers, signal: AbortSignal.timeout(120_000) }
       );
+
+      if (pipelineResponse.ok) {
+        result = await pipelineResponse.json();
+      } else {
+        console.warn("Pipeline returned error:", await pipelineResponse.text());
+      }
+    } catch (err) {
+      console.warn("Pipeline unavailable, creating placeholder slides:", err);
     }
 
-    const result: PptxProcessResult = await pipelineResponse.json();
+    // Build slide data (from pipeline result or placeholder)
+    const slides = result?.slides ?? buildPlaceholderSlides(1, presentationId);
+    const slideCount = result?.slideCount ?? slides.length;
 
-    // Create presentation and slide records in a transaction
+    // Create DB records in a transaction
     const presentation = await prisma.$transaction(async (tx) => {
       const pres = await tx.presentation.create({
         data: {
-          title: title,
-          sourceFile: file.name,
-          slideCount: result.slideCount,
-          userId: session.user!.id,
+          id: presentationId,
+          title,
+          sourceFile: storedFile.path,
+          slideCount,
+          userId,
         },
       });
 
-      // Create slide records for each processed slide
-      if (result.slides && result.slides.length > 0) {
+      if (slides.length > 0) {
         await tx.slide.createMany({
-          data: result.slides.map((slide) => ({
+          data: slides.map((slide) => ({
             presentationId: pres.id,
             index: slide.index,
             imagePath: slide.imagePath,
-            textContent: slide.textContent || null,
-            speakerNotes: slide.speakerNotes || null,
-            shapes: slide.shapes ? (slide.shapes as any) : null,
+            textContent: slide.textContent ?? null,
+            speakerNotes: slide.speakerNotes ?? null,
+            shapes: slide.shapes ? (slide.shapes as object) : null,
           })),
         });
       }
@@ -111,26 +139,28 @@ export async function POST(request: NextRequest) {
       return pres;
     });
 
-    // Fetch the full presentation with slides to return
     const fullPresentation = await prisma.presentation.findUnique({
       where: { id: presentation.id },
-      include: {
-        slides: { orderBy: { index: "asc" } },
-      },
+      include: { slides: { orderBy: { index: "asc" } } },
     });
 
     return NextResponse.json(
-      {
-        message: "File uploaded and processed successfully",
-        presentation: fullPresentation,
-      },
+      { message: "File uploaded successfully", presentation: fullPresentation },
       { status: 201 }
     );
   } catch (error) {
     console.error("POST /api/upload error:", error);
-    return NextResponse.json(
-      { error: "Failed to upload file" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
   }
+}
+
+/** Generate placeholder slides when pipeline is unavailable. */
+function buildPlaceholderSlides(count: number, presentationId: string) {
+  return Array.from({ length: count }, (_, i) => ({
+    index: i,
+    imagePath: `/api/slides/${presentationId}/${i}/placeholder`,
+    textContent: null,
+    speakerNotes: null,
+    shapes: null,
+  }));
 }

@@ -1,0 +1,54 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: slideshow-web
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: "ai-agent-dev-486423:us-central1:slideshow-db"
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      serviceAccountName: slideshow-sa@ai-agent-dev-486423.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        - image: gcr.io/ai-agent-dev-486423/slideshow-web:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+            - name: PIPELINE_URL
+              value: https://slideshow-pipeline-uc.a.run.app
+            - name: GCS_BUCKET
+              value: slideshow-uploads-ai-agent-dev-486423
+            - name: NEXT_PUBLIC_REALTIME_URL
+              value: https://slideshow-realtime-uc.a.run.app
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: slideshow-database-url
+                  key: latest
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slideshow-auth-secret
+                  key: latest
+            - name: NEXTAUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: slideshow-nextauth-url
+                  key: latest
+  traffic:
+    - percent: 100
+      latestRevision: true

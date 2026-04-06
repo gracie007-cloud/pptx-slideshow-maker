@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Auth
+// ============================================================
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  passwordHash  String
+  presentations Presentation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ============================================================
+// Presentations
+// ============================================================
+
+model Presentation {
+  id         String    @id @default(cuid())
+  title      String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceFile String
+  slideCount Int       @default(0)
+  slides     Slide[]
+  quizzes    Quiz[]
+  sessions   Session[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Slide {
+  id             String       @id @default(cuid())
+  presentationId String
+  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  index          Int
+  imagePath      String
+  textContent    String?      @db.Text
+  speakerNotes   String?      @db.Text
+  shapes         Json?
+  kenBurnsConfig Json?
+  quizzes        Quiz[]
+
+  @@unique([presentationId, index])
+  @@index([presentationId])
+}
+
+// ============================================================
+// Quizzes
+// ============================================================
+
+enum QuizType {
+  MULTIPLE_CHOICE
+  WORD_CLOUD
+  SHORT_ANSWER
+  FILL_IN_BLANK
+  IMAGE_UPLOAD
+  DRAWING
+}
+
+model Quiz {
+  id             String       @id @default(cuid())
+  presentationId String
+  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  slideId        String?
+  slide          Slide?       @relation(fields: [slideId], references: [id])
+  type           QuizType
+  question       String
+  options        Json?
+  correctAnswer  String?
+  timeLimit      Int          @default(30)
+  points         Int          @default(1)
+  order          Int          @default(0)
+  responses      Response[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([presentationId])
+  @@index([slideId])
+}
+
+// ============================================================
+// Sessions
+// ============================================================
+
+enum SessionStatus {
+  WAITING
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+model Session {
+  id             String        @id @default(cuid())
+  presentationId String
+  presentation   Presentation  @relation(fields: [presentationId], references: [id])
+  joinCode       String        @unique
+  status         SessionStatus @default(WAITING)
+  currentSlide   Int           @default(0)
+  participants   Participant[]
+  responses      Response[]
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([presentationId])
+  @@index([joinCode])
+}
+
+model Participant {
+  id        String     @id @default(cuid())
+  sessionId String
+  session   Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name      String
+  stars     Int        @default(0)
+  level     Int        @default(1)
+  responses Response[]
+  joinedAt  DateTime   @default(now())
+
+  @@index([sessionId])
+}
+
+model Response {
+  id            String      @id @default(cuid())
+  quizId        String
+  quiz          Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  sessionId     String
+  session       Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  answer        Json
+  isCorrect     Boolean?
+  responseTime  Int?
+  pointsAwarded Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@unique([quizId, sessionId, participantId])
+  @@index([quizId])
+  @@index([sessionId])
+  @@index([participantId])
+}

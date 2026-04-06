@@ -32,7 +32,8 @@
     "qrcode.react": "^4.2.0",
     "recharts": "^2.14.0",
     "react-dropzone": "^14.3.5",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@google-cloud/storage": "^7.14.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

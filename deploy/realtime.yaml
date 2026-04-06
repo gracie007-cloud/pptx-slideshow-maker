@@ -1,0 +1,37 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: slideshow-realtime
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "5"
+    spec:
+      serviceAccountName: slideshow-sa@ai-agent-dev-486423.iam.gserviceaccount.com
+      containerConcurrency: 1000
+      timeoutSeconds: 3600
+      containers:
+        - image: gcr.io/ai-agent-dev-486423/slideshow-realtime:latest
+          ports:
+            - containerPort: 3001
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3001"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: slideshow-redis-url
+                  key: latest
+  traffic:
+    - percent: 100
+      latestRevision: true

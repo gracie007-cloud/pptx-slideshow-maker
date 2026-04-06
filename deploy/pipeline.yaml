@@ -1,0 +1,32 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: slideshow-pipeline
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "5"
+    spec:
+      serviceAccountName: slideshow-sa@ai-agent-dev-486423.iam.gserviceaccount.com
+      containerConcurrency: 4
+      timeoutSeconds: 300
+      containers:
+        - image: gcr.io/ai-agent-dev-486423/slideshow-pipeline:latest
+          ports:
+            - containerPort: 8100
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          env:
+            - name: GCS_BUCKET
+              value: slideshow-uploads-ai-agent-dev-486423
+            - name: GCP_PROJECT
+              value: ai-agent-dev-486423
+  traffic:
+    - percent: 100
+      latestRevision: true
