@@ -36,8 +36,11 @@ COPY packages/realtime/package.json ./packages/realtime/
 # Use production schema (PostgreSQL)
 COPY apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
 
-# Generate Prisma client (hoisted to root node_modules with .npmrc config)
+# Generate Prisma client
 RUN cd apps/web && pnpm exec prisma generate
+# Copy Prisma generated client to a consistent path for the runner stage
+RUN find /app/node_modules -path "*/.prisma/client/default.js" -exec sh -c \
+    'mkdir -p /app/apps/web/node_modules/.prisma && cp -r "$(dirname $(dirname "$1"))" /app/apps/web/node_modules/.prisma/' _ {} \; 2>/dev/null || true
 
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -62,7 +65,9 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy Prisma schema for migrations (not runtime-required but useful)
+# Copy Prisma generated client (moved to consistent path during build)
+COPY --from=builder /app/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
+# Copy Prisma schema for migrations
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
 
 USER nextjs
