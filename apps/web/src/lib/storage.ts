@@ -1,29 +1,34 @@
 /**
  * Storage abstraction: GCS in production, local filesystem in development.
+ * Slide images are served via /api/media/[...path] proxy (no public bucket needed).
  */
 
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 
-const USE_GCS = process.env.GCS_BUCKET && process.env.NODE_ENV === "production";
+export const USE_GCS =
+  !!process.env.GCS_BUCKET && process.env.NODE_ENV === "production";
 const BUCKET = process.env.GCS_BUCKET ?? "slideshow-uploads";
-const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "apps/web/public/uploads");
+const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 // ─── Types ───────────────────────────────────────────────────
 
 export interface StorageFile {
-  /** Public-accessible URL */
+  /** URL to fetch the file (proxy URL or local URL) */
   url: string;
-  /** Storage path (GCS object name or local relative path) */
+  /** GCS object name or local relative path (stored in DB) */
   path: string;
 }
 
-// ─── GCS helpers (loaded lazily so local dev doesn't need credentials) ───
+// ─── GCS client (lazy loaded) ────────────────────────────────
 
+let _bucket: any = null;
 async function getGCSBucket() {
+  if (_bucket) return _bucket;
   const { Storage } = await import("@google-cloud/storage");
   const storage = new Storage({ projectId: process.env.GCP_PROJECT });
-  return storage.bucket(BUCKET);
+  _bucket = storage.bucket(BUCKET);
+  return _bucket;
 }
 
 // ─── Upload ──────────────────────────────────────────────────
@@ -35,11 +40,9 @@ export async function uploadFile(
 ): Promise<StorageFile> {
   if (USE_GCS) {
     const bucket = await getGCSBucket();
-    const file = bucket.file(destPath);
-    await file.save(buffer, { contentType, resumable: false });
-    await file.makePublic();
+    await bucket.file(destPath).save(buffer, { contentType, resumable: false });
     return {
-      url: `https://storage.googleapis.com/${BUCKET}/${destPath}`,
+      url: `/api/media/${destPath}`,
       path: destPath,
     };
   }
@@ -54,6 +57,19 @@ export async function uploadFile(
   };
 }
 
+// ─── Download (for proxy route) ───────────────────────────────
+
+export async function downloadFile(storagePath: string): Promise<Buffer> {
+  if (USE_GCS) {
+    const bucket = await getGCSBucket();
+    const [data] = await bucket.file(storagePath).download();
+    return data;
+  }
+
+  const { readFile } = await import("fs/promises");
+  return readFile(path.join(LOCAL_UPLOADS_DIR, storagePath));
+}
+
 // ─── Delete ──────────────────────────────────────────────────
 
 export async function deleteFile(storagePath: string): Promise<void> {
@@ -63,36 +79,16 @@ export async function deleteFile(storagePath: string): Promise<void> {
     return;
   }
 
+  const { unlink: rm } = await import("fs/promises");
   const localPath = path.join(LOCAL_UPLOADS_DIR, storagePath);
-  await unlink(localPath).catch(() => {});
-}
-
-// ─── Signed URL for pipeline-to-GCS writes ───────────────────
-
-export async function getSignedUploadUrl(
-  destPath: string,
-  contentType: string,
-  expiresMs = 15 * 60 * 1000
-): Promise<string> {
-  if (!USE_GCS) {
-    return `/api/mock-upload?path=${encodeURIComponent(destPath)}`;
-  }
-
-  const bucket = await getGCSBucket();
-  const [url] = await bucket.file(destPath).getSignedUrl({
-    version: "v4",
-    action: "write",
-    expires: Date.now() + expiresMs,
-    contentType,
-  });
-  return url;
+  await rm(localPath).catch(() => {});
 }
 
 // ─── Public URL helper ───────────────────────────────────────
 
-export function getPublicUrl(storagePath: string): string {
+export function getMediaUrl(storagePath: string): string {
   if (USE_GCS) {
-    return `https://storage.googleapis.com/${BUCKET}/${storagePath}`;
+    return `/api/media/${storagePath}`;
   }
   return `/uploads/${storagePath}`;
 }
