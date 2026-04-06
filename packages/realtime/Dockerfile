@@ -18,21 +18,17 @@ COPY packages/realtime/src/ ./packages/realtime/src/
 COPY packages/realtime/tsconfig.json ./packages/realtime/tsconfig.json
 COPY packages/shared/src/ ./packages/shared/src/
 
-# Bundle: externalize runtime node_modules, inline shared workspace code
+# Bundle everything into one file (avoids pnpm symlink issues in the runner)
+# Mark only native optional modules as external
 RUN packages/realtime/node_modules/.bin/esbuild \
       packages/realtime/src/server.ts \
       --bundle \
       --platform=node \
       --target=node20 \
-      --packages=external \
       --alias:@slideshow/shared=./packages/shared/src/index.ts \
-      --outfile=packages/realtime/dist/server.js 2>&1 || \
-    packages/realtime/node_modules/.bin/esbuild \
-      packages/realtime/src/server.ts \
-      --bundle \
-      --platform=node \
-      --target=node20 \
-      --packages=external \
+      --external:bufferutil \
+      --external:utf-8-validate \
+      --external:supports-color \
       --outfile=packages/realtime/dist/server.js
 
 # ─── Stage 2: runner ─────────────────────────────────────────
@@ -44,11 +40,8 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 realtime
 
-# Copy bundled server
+# Copy bundled server (fully self-contained, no node_modules needed)
 COPY --from=builder /app/packages/realtime/dist/server.js ./server.js
-
-# Copy runtime node_modules from the package (socket.io, ioredis, etc.)
-COPY --from=builder /app/packages/realtime/node_modules ./node_modules
 
 USER realtime
 

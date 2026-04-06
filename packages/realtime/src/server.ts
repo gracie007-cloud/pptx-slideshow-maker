@@ -9,7 +9,7 @@ import type {
 } from "@slideshow/shared";
 import { registerEventHandlers } from "./events";
 
-const SOCKET_PORT = parseInt(process.env.SOCKET_PORT || "3001", 10);
+const SOCKET_PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10);
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 
 export function createSocketServer() {
