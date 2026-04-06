@@ -151,7 +151,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (parsed.data.timeLimit !== undefined) updateData.timeLimit = parsed.data.timeLimit;
     if (parsed.data.points !== undefined) updateData.points = parsed.data.points;
     if (parsed.data.order !== undefined) updateData.order = parsed.data.order;
-    if (parsed.data.slideId !== undefined) updateData.slideId = parsed.data.slideId;
+    if (parsed.data.slideId !== undefined)
+      updateData.slide = parsed.data.slideId
+        ? { connect: { id: parsed.data.slideId } }
+        : { disconnect: true };
 
     const quiz = await prisma.quiz.update({
       where: { id: quizId },
