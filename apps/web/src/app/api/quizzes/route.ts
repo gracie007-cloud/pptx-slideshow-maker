@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import type { QuizType } from "@slideshow/shared";
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
         slideId: parsed.data.slideId ?? null,
         type: parsed.data.type,
         question: parsed.data.question,
-        options: parsed.data.options ?? undefined,
+        options: (parsed.data.options ?? undefined) as Prisma.InputJsonValue | undefined,
         correctAnswer: parsed.data.correctAnswer ?? null,
         timeLimit: parsed.data.timeLimit,
         points: parsed.data.points,

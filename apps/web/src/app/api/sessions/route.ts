@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const formatted = sessions.map((s: any) => ({
+    const formatted = sessions.map((s: typeof sessions[number]) => ({
       id: s.id,
       presentationId: s.presentationId,
       presentationTitle: s.presentation.title,

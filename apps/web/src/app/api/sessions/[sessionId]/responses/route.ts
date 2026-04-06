@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           quizId,
           sessionId,
           participantId,
-          answer: answer as any,
+          answer: answer as Prisma.InputJsonValue,
           isCorrect,
           responseTime: responseTime ?? null,
           pointsAwarded,

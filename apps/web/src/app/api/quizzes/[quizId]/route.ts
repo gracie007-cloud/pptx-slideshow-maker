@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import type { QuizType } from "@slideshow/shared";
@@ -140,10 +141,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build update data from provided fields only
-    const updateData: Record<string, unknown> = {};
+    const updateData: Prisma.QuizUpdateInput = {};
     if (parsed.data.question !== undefined) updateData.question = parsed.data.question;
     if (parsed.data.type !== undefined) updateData.type = parsed.data.type;
-    if (parsed.data.options !== undefined) updateData.options = parsed.data.options;
+    if (parsed.data.options !== undefined)
+      updateData.options = parsed.data.options as Prisma.InputJsonValue;
     if (parsed.data.correctAnswer !== undefined)
       updateData.correctAnswer = parsed.data.correctAnswer;
     if (parsed.data.timeLimit !== undefined) updateData.timeLimit = parsed.data.timeLimit;
