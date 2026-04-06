@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
 # Copy workspace manifests
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json .npmrc ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/realtime/package.json ./packages/realtime/
@@ -36,11 +36,8 @@ COPY packages/realtime/package.json ./packages/realtime/
 # Use production schema (PostgreSQL)
 COPY apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
 
-# Generate Prisma client
-RUN cd apps/web && pnpm exec prisma generate 2>&1 && \
-    ls -la node_modules/.prisma/ 2>/dev/null || \
-    (echo "Prisma client not in apps/web/node_modules/.prisma, checking root..." && \
-     ls -la /app/node_modules/.prisma/ 2>/dev/null || true)
+# Generate Prisma client (hoisted to root node_modules with .npmrc config)
+RUN cd apps/web && pnpm exec prisma generate
 
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -66,9 +63,9 @@ COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
 # Copy Prisma generated client for runtime DB access
-# With pnpm, .prisma client is generated to the package's node_modules
-COPY --from=builder /app/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
-COPY --from=builder /app/apps/web/node_modules/@prisma/client ./apps/web/node_modules/@prisma/client
+# With pnpm public-hoist-pattern for prisma, client is at root node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
 
 USER nextjs
