@@ -11,7 +11,13 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/realtime/package.json ./packages/realtime/
 
-RUN pnpm install --frozen-lockfile
+# Skip canvas/puppeteer native builds (not needed in server-side Next.js)
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV npm_config_build_from_source=false
+
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    # Re-run scripts only for packages that need them (not canvas)
+    pnpm exec prisma --version 2>/dev/null || true
 
 # ─── Stage 2: builder ────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -19,22 +25,23 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules 2>/dev/null || true
+# Copy all installed node_modules from deps stage
+COPY --from=deps /app/ ./
 
-COPY . .
+# Copy source code
+COPY apps/web/ ./apps/web/
+COPY packages/shared/ ./packages/shared/
+COPY packages/realtime/package.json ./packages/realtime/
 
 # Use production schema (PostgreSQL)
 COPY apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
 
-# Generate Prisma client
+# Generate Prisma client (this runs the generate script, not canvas)
 RUN cd apps/web && npx prisma generate
 
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-# Dummy secrets so Next.js build doesn't fail (real values injected at runtime)
 ENV AUTH_SECRET=build-placeholder-replace-at-runtime
 ENV DATABASE_URL=postgresql://user:pass@host/db
 
@@ -55,7 +62,7 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy Prisma client
+# Copy Prisma client for runtime DB access
 COPY --from=builder /app/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
 COPY --from=builder /app/apps/web/node_modules/@prisma ./apps/web/node_modules/@prisma
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma

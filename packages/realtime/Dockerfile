@@ -5,7 +5,7 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY packages/realtime/package.json ./packages/realtime/
 COPY packages/shared/package.json ./packages/shared/
 
@@ -18,15 +18,21 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/realtime/node_modules ./packages/realtime/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules 2>/dev/null || true
-
 COPY packages/realtime/ ./packages/realtime/
 COPY packages/shared/ ./packages/shared/
-COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY tsconfig.base.json ./
 
-RUN cd packages/shared && pnpm run build 2>/dev/null || true
-RUN cd packages/realtime && pnpm run build
+# Link workspace packages so @slideshow/shared resolves
+RUN mkdir -p packages/realtime/node_modules/@slideshow && \
+    ln -s /app/packages/shared packages/realtime/node_modules/@slideshow/shared
+
+# Build shared package (TypeScript → JS)
+WORKDIR /app/packages/shared
+RUN npx tsc --noEmit false --outDir dist --declaration false --declarationMap false 2>/dev/null || true
+
+# Build realtime server
+WORKDIR /app/packages/realtime
+RUN npx tsc
 
 # ─── Stage 3: runner ─────────────────────────────────────────
 FROM node:20-alpine AS runner
