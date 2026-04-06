@@ -38,9 +38,18 @@ COPY apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
 
 # Generate Prisma client
 RUN cd apps/web && pnpm exec prisma generate
-# Copy Prisma generated client to a consistent path for the runner stage
-RUN find /app/node_modules -path "*/.prisma/client/default.js" -exec sh -c \
-    'mkdir -p /app/apps/web/node_modules/.prisma && cp -r "$(dirname $(dirname "$1"))" /app/apps/web/node_modules/.prisma/' _ {} \; 2>/dev/null || true
+# Copy Prisma generated client to a well-known path for the runner stage
+# The client ends up in the pnpm virtual store; we extract it to /app/.prisma-client/
+RUN set -e; \
+    PRISMA_CLIENT=$(find /app/node_modules -path "*/.prisma/client/default.js" | head -1); \
+    if [ -n "$PRISMA_CLIENT" ]; then \
+      PRISMA_DIR=$(dirname "$PRISMA_CLIENT"); \
+      mkdir -p /app/.prisma-client; \
+      cp -rL "$PRISMA_DIR/." /app/.prisma-client/; \
+      echo "Prisma client copied from $PRISMA_DIR"; \
+    else \
+      echo "ERROR: Prisma client not found!" && exit 1; \
+    fi
 
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -65,8 +74,8 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy Prisma generated client (moved to consistent path during build)
-COPY --from=builder /app/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
+# Copy Prisma generated client where standalone's @prisma/client looks for it
+COPY --from=builder /app/.prisma-client ./node_modules/.prisma/client
 # Copy Prisma schema for migrations
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
 

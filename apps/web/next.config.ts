@@ -23,14 +23,6 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "100mb",
     },
-    // Include Prisma query engine in the standalone output
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    outputFileTracingIncludes: {
-      "/**": [
-        "./node_modules/.prisma/**",
-        "../../node_modules/.pnpm/@prisma+*/node_modules/.prisma/**",
-      ],
-    } as any,
   },
 };
 
