@@ -36,8 +36,11 @@ COPY packages/realtime/package.json ./packages/realtime/
 # Use production schema (PostgreSQL)
 COPY apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
 
-# Generate Prisma client (this runs the generate script, not canvas)
-RUN cd apps/web && npx prisma generate
+# Generate Prisma client
+RUN cd apps/web && pnpm exec prisma generate 2>&1 && \
+    ls -la node_modules/.prisma/ 2>/dev/null || \
+    (echo "Prisma client not in apps/web/node_modules/.prisma, checking root..." && \
+     ls -la /app/node_modules/.prisma/ 2>/dev/null || true)
 
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -62,9 +65,10 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy Prisma client for runtime DB access
+# Copy Prisma generated client for runtime DB access
+# With pnpm, .prisma client is generated to the package's node_modules
 COPY --from=builder /app/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
-COPY --from=builder /app/apps/web/node_modules/@prisma ./apps/web/node_modules/@prisma
+COPY --from=builder /app/apps/web/node_modules/@prisma/client ./apps/web/node_modules/@prisma/client
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
 
 USER nextjs
