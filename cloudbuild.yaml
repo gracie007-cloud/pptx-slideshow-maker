@@ -70,9 +70,8 @@ steps:
         # Start proxy in background
         /cloud-sql-proxy --unix-socket /cloudsql $PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE &
         sleep 3
-        # Pull DB URL from Secret Manager (replace host placeholder)
-        DB_URL=$(gcloud secrets versions access latest --secret=slideshow-database-url --project=$PROJECT_ID)
-        export DATABASE_URL="$DB_URL"
+        # Pull DB URL from Secret Manager
+        export DATABASE_URL="$$(gcloud secrets versions access latest --secret=slideshow-database-url --project=$PROJECT_ID)"
         # Generate prisma client and run migrations
         cd /workspace/apps/web
         cp prisma/schema.production.prisma prisma/schema.prisma
