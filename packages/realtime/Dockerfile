@@ -47,8 +47,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy bundled server
 COPY --from=builder /app/packages/realtime/dist/server.js ./server.js
 
-# Copy runtime node_modules (socket.io, ioredis, etc.)
-COPY --from=builder /app/node_modules ./node_modules
+# Copy runtime node_modules from the package (socket.io, ioredis, etc.)
+COPY --from=builder /app/packages/realtime/node_modules ./node_modules
 
 USER realtime
 
