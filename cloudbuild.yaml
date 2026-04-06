@@ -1,17 +1,23 @@
 steps:
+  # ─── Configure Docker for Artifact Registry ──────────────────
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: "auth-docker"
+    args: ["auth", "configure-docker", "us-central1-docker.pkg.dev", "--quiet"]
+    waitFor: ["-"]
+
   # ─── Build Next.js web app ───────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
     id: "build-web"
     args:
       - build
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-web:$_TAG"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web:$_TAG"
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-web:latest"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web:latest"
       - -f
       - apps/web/Dockerfile
       - .
-    waitFor: ["-"]
+    waitFor: ["auth-docker"]
 
   # ─── Build realtime server ───────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
@@ -19,13 +25,13 @@ steps:
     args:
       - build
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-realtime:$_TAG"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:$_TAG"
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-realtime:latest"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:latest"
       - -f
       - packages/realtime/Dockerfile
       - .
-    waitFor: ["-"]
+    waitFor: ["auth-docker"]
 
   # ─── Build Python PPTX pipeline ──────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
@@ -33,28 +39,28 @@ steps:
     args:
       - build
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-pipeline:$_TAG"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:$_TAG"
       - -t
-      - "gcr.io/$PROJECT_ID/slideshow-pipeline:latest"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:latest"
       - -f
       - packages/pptx-pipeline/Dockerfile
       - packages/pptx-pipeline
-    waitFor: ["-"]
+    waitFor: ["auth-docker"]
 
   # ─── Push images ─────────────────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
     id: "push-web"
-    args: ["push", "--all-tags", "gcr.io/$PROJECT_ID/slideshow-web"]
+    args: ["push", "--all-tags", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web"]
     waitFor: ["build-web"]
 
   - name: "gcr.io/cloud-builders/docker"
     id: "push-realtime"
-    args: ["push", "--all-tags", "gcr.io/$PROJECT_ID/slideshow-realtime"]
+    args: ["push", "--all-tags", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime"]
     waitFor: ["build-realtime"]
 
   - name: "gcr.io/cloud-builders/docker"
     id: "push-pipeline"
-    args: ["push", "--all-tags", "gcr.io/$PROJECT_ID/slideshow-pipeline"]
+    args: ["push", "--all-tags", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline"]
     waitFor: ["build-pipeline"]
 
   # ─── Run DB migrations via Cloud SQL proxy ───────────────────
@@ -90,7 +96,7 @@ steps:
       - run
       - deploy
       - slideshow-web
-      - --image=gcr.io/$PROJECT_ID/slideshow-web:$_TAG
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web:$_TAG
       - --region=$_REGION
       - --platform=managed
       - --allow-unauthenticated
@@ -115,7 +121,7 @@ steps:
       - run
       - deploy
       - slideshow-realtime
-      - --image=gcr.io/$PROJECT_ID/slideshow-realtime:$_TAG
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:$_TAG
       - --region=$_REGION
       - --platform=managed
       - --allow-unauthenticated
@@ -137,7 +143,7 @@ steps:
       - run
       - deploy
       - slideshow-pipeline
-      - --image=gcr.io/$PROJECT_ID/slideshow-pipeline:$_TAG
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:$_TAG
       - --region=$_REGION
       - --platform=managed
       - --no-allow-unauthenticated
@@ -152,12 +158,12 @@ steps:
     waitFor: ["push-pipeline"]
 
 images:
-  - "gcr.io/$PROJECT_ID/slideshow-web:$_TAG"
-  - "gcr.io/$PROJECT_ID/slideshow-web:latest"
-  - "gcr.io/$PROJECT_ID/slideshow-realtime:$_TAG"
-  - "gcr.io/$PROJECT_ID/slideshow-realtime:latest"
-  - "gcr.io/$PROJECT_ID/slideshow-pipeline:$_TAG"
-  - "gcr.io/$PROJECT_ID/slideshow-pipeline:latest"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web:$_TAG"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web:latest"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:$_TAG"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:latest"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:$_TAG"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:latest"
 
 substitutions:
   _REGION: us-central1
