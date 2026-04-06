@@ -89,10 +89,9 @@ steps:
       - |
         set -e
         IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/migrate:$_TAG"
-        JOB="slideshow-migrate"
-        # Create or update the migration job
-        gcloud run jobs create $JOB \
-          --image="$IMAGE" \
+        # Create or update the migration Cloud Run Job
+        gcloud run jobs create slideshow-migrate \
+          --image="$$IMAGE" \
           --region=$_REGION \
           --vpc-connector=projects/$PROJECT_ID/locations/$_REGION/connectors/slideshow-connector \
           --vpc-egress=private-ranges-only \
@@ -102,8 +101,8 @@ steps:
           --memory=512Mi \
           --max-retries=1 \
           --project=$PROJECT_ID 2>/dev/null || \
-        gcloud run jobs update $JOB \
-          --image="$IMAGE" \
+        gcloud run jobs update slideshow-migrate \
+          --image="$$IMAGE" \
           --region=$_REGION \
           --vpc-connector=projects/$PROJECT_ID/locations/$_REGION/connectors/slideshow-connector \
           --vpc-egress=private-ranges-only \
@@ -114,7 +113,7 @@ steps:
           --max-retries=1 \
           --project=$PROJECT_ID
         # Execute and wait
-        gcloud run jobs execute $JOB --wait --region=$_REGION --project=$PROJECT_ID
+        gcloud run jobs execute slideshow-migrate --wait --region=$_REGION --project=$PROJECT_ID
     waitFor: ["push-migrate"]
 
   # ─── Deploy slideshow-web ─────────────────────────────────────
