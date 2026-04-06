@@ -62,10 +62,7 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Copy Prisma generated client for runtime DB access
-# With pnpm public-hoist-pattern for prisma, client is at root node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# Copy Prisma schema for migrations (not runtime-required but useful)
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
 
 USER nextjs
