@@ -125,16 +125,15 @@ export async function POST(request: NextRequest) {
       });
 
       if (slides.length > 0) {
-        await tx.slide.createMany({
-          data: slides.map((slide) => ({
-            presentationId: pres.id,
-            index: slide.index,
-            imagePath: slide.imagePath,
-            textContent: slide.textContent ?? null,
-            speakerNotes: slide.speakerNotes ?? null,
-            shapes: slide.shapes ? (slide.shapes as Prisma.InputJsonValue) : null,
-          })),
-        });
+        const slideData: Prisma.SlideCreateManyInput[] = slides.map((slide) => ({
+          presentationId: pres.id,
+          index: slide.index,
+          imagePath: slide.imagePath,
+          textContent: slide.textContent ?? null,
+          speakerNotes: slide.speakerNotes ?? null,
+          shapes: slide.shapes ? (slide.shapes as Prisma.InputJsonValue) : Prisma.DbNull,
+        }));
+        await tx.slide.createMany({ data: slideData });
       }
 
       return pres;
