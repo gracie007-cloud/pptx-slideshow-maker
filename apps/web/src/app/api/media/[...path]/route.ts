@@ -33,7 +33,7 @@ export async function GET(
     const ext = storagePath.split(".").pop()?.toLowerCase() ?? "";
     const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
 
-    return new NextResponse(data, {
+    return new NextResponse(new Uint8Array(data), {
       status: 200,
       headers: {
         "Content-Type": contentType,
