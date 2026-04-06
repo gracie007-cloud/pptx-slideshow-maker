@@ -47,11 +47,28 @@ steps:
       - packages/pptx-pipeline
     waitFor: ["auth-docker"]
 
+  # ─── Build migration image ───────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-migrate"
+    args:
+      - build
+      - -t
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/migrate:$_TAG"
+      - -f
+      - apps/web/Dockerfile.migrate
+      - .
+    waitFor: ["auth-docker"]
+
   # ─── Push images ─────────────────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
     id: "push-web"
     args: ["push", "--all-tags", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/web"]
     waitFor: ["build-web"]
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-migrate"
+    args: ["push", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/migrate:$_TAG"]
+    waitFor: ["build-migrate"]
 
   - name: "gcr.io/cloud-builders/docker"
     id: "push-realtime"
@@ -63,30 +80,42 @@ steps:
     args: ["push", "--all-tags", "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline"]
     waitFor: ["build-pipeline"]
 
-  # ─── Run DB migrations via Cloud SQL proxy ───────────────────
-  - name: "gcr.io/cloud-builders/gcloud"
+  # ─── Run DB migrations via Cloud Run Job (inside VPC, has Cloud SQL access) ──
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: "migrate-db"
     entrypoint: bash
     args:
       - -c
       - |
-        # Install cloud-sql-proxy
-        curl -sL https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64 \
-          -o /cloud-sql-proxy && chmod +x /cloud-sql-proxy
-        mkdir -p /cloudsql
-        # Start proxy in background
-        /cloud-sql-proxy --unix-socket /cloudsql $PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE &
-        sleep 3
-        # Pull DB URL from Secret Manager
-        export DATABASE_URL="$$(gcloud secrets versions access latest --secret=slideshow-database-url --project=$PROJECT_ID)"
-        # Run migrations using production schema
-        cd /workspace/apps/web
-        cp prisma/schema.production.prisma prisma/schema.prisma
-        npm install -g pnpm@9
-        pnpm exec prisma generate
-        pnpm exec prisma migrate deploy 2>&1 || \
-          pnpm exec prisma db push --accept-data-loss 2>&1
-    waitFor: ["push-web"]
+        set -e
+        IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/migrate:$_TAG"
+        JOB="slideshow-migrate"
+        # Create or update the migration job
+        gcloud run jobs create $JOB \
+          --image="$IMAGE" \
+          --region=$_REGION \
+          --vpc-connector=projects/$PROJECT_ID/locations/$_REGION/connectors/slideshow-connector \
+          --vpc-egress=private-ranges-only \
+          --set-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE \
+          --set-secrets=DATABASE_URL=slideshow-database-url:latest \
+          --service-account=slideshow-sa@$PROJECT_ID.iam.gserviceaccount.com \
+          --memory=512Mi \
+          --max-retries=1 \
+          --project=$PROJECT_ID 2>/dev/null || \
+        gcloud run jobs update $JOB \
+          --image="$IMAGE" \
+          --region=$_REGION \
+          --vpc-connector=projects/$PROJECT_ID/locations/$_REGION/connectors/slideshow-connector \
+          --vpc-egress=private-ranges-only \
+          --set-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE \
+          --set-secrets=DATABASE_URL=slideshow-database-url:latest \
+          --service-account=slideshow-sa@$PROJECT_ID.iam.gserviceaccount.com \
+          --memory=512Mi \
+          --max-retries=1 \
+          --project=$PROJECT_ID
+        # Execute and wait
+        gcloud run jobs execute $JOB --wait --region=$_REGION --project=$PROJECT_ID
+    waitFor: ["push-migrate"]
 
   # ─── Deploy slideshow-web ─────────────────────────────────────
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -164,6 +193,7 @@ images:
   - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/realtime:latest"
   - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:$_TAG"
   - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/pipeline:latest"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/slideshow/migrate:$_TAG"
 
 substitutions:
   _REGION: us-central1

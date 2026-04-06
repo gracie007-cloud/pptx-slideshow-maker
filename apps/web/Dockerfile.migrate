@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+# Lightweight image just for running Prisma migrations via Cloud Run Job
+FROM node:20-alpine
+
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+WORKDIR /app
+
+# Only need prisma CLI + schema
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/realtime/package.json ./packages/realtime/
+
+# Install only prisma (minimal deps)
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    --filter @slideshow/web
+
+# Copy schema files
+COPY apps/web/prisma/ ./apps/web/prisma/
+
+# Use production schema
+RUN cp apps/web/prisma/schema.production.prisma apps/web/prisma/schema.prisma
+
+# Generate client (needed for prisma CLI to work)
+RUN cd apps/web && pnpm exec prisma generate
+
+CMD ["sh", "-c", "cd apps/web && pnpm exec prisma db push --accept-data-loss && echo 'Migration complete'"]
